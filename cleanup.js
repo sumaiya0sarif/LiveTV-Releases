@@ -47,7 +47,7 @@
         '.click-trap, .click-box, .tap-to-play, .play-over, .dt_mainmeta, .doothemes_widget { display: none !important; }' +
         'iframe[style*="2147483647"][width="140"], iframe[width="140"], [class*="bell-icon"], img[src*="arcaceahelper.cyou"] { display: none !important; }' +
 
-        '.col-sm-12 { display: none !important; }' +
+        '.ad-container { display: none !important; }' +
 
         //'.h5-social-share { display: none !important; }' +
         //'.doothemes_widget { display: none !important; }' +
