@@ -1,6 +1,74 @@
 (function () {
     'use strict';
     console.log('[XQ77] cleanup.js initialized');
+
+    // ============================================================
+    // CLOUDFLARE / BOT DETECTION BYPASS
+    // WebView-এ missing browser APIs inject করো যেগুলো Cloudflare চেক করে
+    // ============================================================
+    try {
+        // 1. webdriver flag — Cloudflare এটা true দেখলে bot বলে মনে করে
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+            configurable: true
+        });
+
+        // 2. chrome object — real Chrome-এ এটা থাকে, WebView-এ থাকে না
+        if (!window.chrome) {
+            window.chrome = {
+                runtime: {
+                    id: undefined,
+                    connect: function() {},
+                    sendMessage: function() {}
+                },
+                loadTimes: function() {},
+                csi: function() {},
+                app: {}
+            };
+        }
+
+        // 3. Permissions API — Cloudflare এটা probe করে
+        if (navigator.permissions && navigator.permissions.query) {
+            var _origQuery = navigator.permissions.query.bind(navigator.permissions);
+            navigator.permissions.query = function(parameters) {
+                if (parameters.name === 'notifications') {
+                    return Promise.resolve({ state: 'denied', onchange: null });
+                }
+                return _origQuery(parameters);
+            };
+        }
+
+        // 4. Plugin list — real browser-এ plugins থাকে, WebView-এ খালি
+        Object.defineProperty(navigator, 'plugins', {
+            get: function() {
+                return [
+                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+                    { name: 'Native Client', filename: 'internal-nacl-plugin' }
+                ];
+            },
+            configurable: true
+        });
+
+        // 5. Language — real Chrome এর মতো
+        Object.defineProperty(navigator, 'languages', {
+            get: function() { return ['en-US', 'en']; },
+            configurable: true
+        });
+
+        // 6. Hardware concurrency (CPU cores) — bot fingerprint এড়াতে
+        if (navigator.hardwareConcurrency === 0 || !navigator.hardwareConcurrency) {
+            Object.defineProperty(navigator, 'hardwareConcurrency', {
+                get: function() { return 8; },
+                configurable: true
+            });
+        }
+
+        console.log('[XQ77] Anti-fingerprint injection complete');
+    } catch(e) {
+        console.log('[XQ77] Anti-fingerprint error (non-critical):', e.message);
+    }
+
     var host = window.location.hostname;
     // এই ডায়লগটি moviebox.ph ছাড়াও অন্য hosts (যেমন 123movienow.cc) এ থাকতে পারে
     var isMoviebox = host.includes('moviebox.ph') || host.includes('123movienow.cc') || host.includes('aoneroom.com');
@@ -13,9 +81,10 @@
         if (!url) return null;
         try {
             var targetHost = new URL(url, window.location.href).hostname;
-            // হোয়াইট লিস্টেড ডোমেইন হলে ন্যাভিগেট করতে দাও
+            // হোয়াইট লিস্টেড ডোমেইন হলে ন্যাভিগেট করতে দাও
             if (targetHost.includes('watchofree.beauty') || targetHost.includes('moviebox.ph') || 
-                targetHost.includes('123movienow.cc') || targetHost.includes('aoneroom.com')) {
+                targetHost.includes('123movienow.cc') || targetHost.includes('aoneroom.com') ||
+                targetHost.includes('bilibili.tv') || targetHost.includes('bstarstatic.com')) {
                 return originalOpen.apply(window, arguments);
             }
         } catch(e) {}
@@ -24,9 +93,33 @@
     };
 
     // ============================================================
+    // লাল বর্ডার সিঙ্গেল ট্যাপ বিহেভিয়ার
+    // যে element ট্যাপ করা হবে শুধু সেটায় বর্ডার থাকবে, আগেরটা blur() হবে
+    // ============================================================
+    (function() {
+        var lastTapped = null;
+        document.addEventListener('touchstart', function(e) {
+            var target = e.target;
+            // আগের element blur করো (যদি ভিন্ন element)
+            if (lastTapped && lastTapped !== target) {
+                try {
+                    lastTapped.blur();
+                    // site JS দিয়ে inline outline যোগ হলে সেটাও সরাও
+                    lastTapped.style.outline = '';
+                    lastTapped.style.boxShadow = '';
+                } catch(ex) {}
+            }
+            lastTapped = target;
+        }, { passive: true, capture: true });
+    })();
+
+    // ============================================================
     // CSS — primary blocking (React re-render এও কাজ করে)
     // ============================================================
     var CSS_RULES =
+        // ট্যাপ highlight glow বন্ধ (লাল বর্ডার নয়, শুধু অ্যান্ড্রয়ের tap glow)
+        '* { -webkit-tap-highlight-color: transparent !important; }'+
+
         // General ad iframes & containers
         'iframe[src*="ads"], iframe[src*="doubleclick"],' +
         'iframe[src*="vast"], iframe[src*="preroll"],' +
@@ -47,8 +140,47 @@
         '.click-trap, .click-box, .tap-to-play, .play-over, .dt_mainmeta, .doothemes_widget { display: none !important; }' +
         'iframe[style*="2147483647"][width="140"], iframe[width="140"], [class*="bell-icon"], img[src*="arcaceahelper.cyou"] { display: none !important; }' +
 
-        
 
+        '.swiper.mySwiper, .mynav, .social-sharing, .sbox, .chat-float-btn { display: none !important; }' +
+
+        'a[href*="anigo.to"] { display: none !important; }'+
+        // aoneroom.com ভিডিও অ্যাড কন্টেইনার — blur bg + ad video + wrapper
+        'video.video-blur-bg { display: none !important; }'+
+        '.h5-video-Ads, .video-ads { display: none !important; }'+
+        '#h5-ads-video-full { display: none !important; }'+
+        '.video-container:has(.video-ads), .video-container:has(#h5-ads-video-full), .video-container:has(.video-blur-bg) { display: none !important; }'+
+        '.h5-video-container { display: none !important; }'+
+        'div[class="video-container"] { display: none !important; }'+
+
+        // bilibili.tv — “Open the App / Download” dialog
+        // .dialog__container--show = dialog visible হলে এই class যোগ হয়
+        // button.dialog__cancel দিয়ে confirm করা যায় যে এটা bilibili-specific dialog
+        '.dialog__container--show:has(button.dialog__cancel) { display: none !important; }'+
+        // সাথে overlay/backdrop সরাও
+        '.dialog__mask { display: none !important; }'+
+
+        '.slick-slide:has(.exclusive), a:has(.exclusive) { opacity: 0.3 !important; filter: grayscale(100%) !important; pointer-events: none !important; }'+
+        '.ad-tag { display: none !important; }'+
+        'div:has(> .ad-tag) { display: none !important; }'+
+
+        // Bongo app promo banner (শুধু img hide — div হাইড করলে layout ভেঙ্গে যায়)
+        'img[alt="Bongo icon"] { display: none !important; }'+
+
+        // HydraHD domain announcement banner
+        '.alert.info.hidden-xs.hidden-sm { display: none !important; }'+
+        'a[href*="hydrahd.info"], a[href*="t.me/HDHYDRAHD"] { display: none !important; }'+
+
+        // bilibili.tv — “Open the App / Download” dialog
+        // .dialog__container--show = dialog visible হলে এই class যোগ হয়
+        // button.dialog__cancel দিয়ে confirm করা যায় যে এটা bilibili-specific dialog
+        '.dialog__container--show:has(button.dialog__cancel) { display: none !important; }'+
+        // সাথে overlay/backdrop সরাও
+        '.dialog__mask { display: none !important; }'+
+        // bilibili.tv — "Watch on BiliBili" button + "Open BiliBili App" dialog
+        'button.bstar-open-app { display: none !important; }'+
+        '.dialog__container--video-toapp-dialog { display: none !important; }'+
+
+        //'.notice-card { display: none !important; }' +
         //'.h5-social-share { display: none !important; }' +
         //'.doothemes_widget { display: none !important; }' +
 
@@ -69,6 +201,7 @@
             
             // Generic wide fixed overlays (often used for these modals)
             'div[class*="download-dialog"] { display: none !important; }' +
+
 
 
             // Social share icons
@@ -97,6 +230,9 @@
         style.textContent = CSS_RULES;
         (document.head || document.documentElement).appendChild(style);
     }
+
+    // প্রথমবার CSS inject করো
+    injectCSS();
 
     // cinoplay-style remove হলে re-inject
     var styleGuard = new MutationObserver(function() {
@@ -215,7 +351,7 @@
             var tags = root.querySelectorAll ? root.querySelectorAll('button, a, h4, h3, .main-btn') : [];
             for (var i = 0; i < tags.length; i++) {
                 var el = tags[i];
-                if (hiddenEls.has(el)) continue;
+                if (hiddenEls.has(el)) { if (el.style.display !== "none") el.style.setProperty("display", "none", "important"); continue; }
                 var txt = el.textContent ? el.textContent.toLowerCase() : '';
                 if (txt.length > 80) continue;
                 for (var k = 0; k < keywords.length; k++) {
@@ -254,6 +390,26 @@
     // ============================================================
     setInterval(function() {
         try {
+            // Premium/Exclusive items "Taka" symbol gray out
+            document.querySelectorAll('.MuiButton-label, span').forEach(function(el) {
+                if (el.innerText && el.innerText.trim() === '৳') {
+                    var card = el.closest('.slick-slide') || el.closest('a') || el.closest('.MuiCard-root');
+                    if (card && card.style.opacity !== '0.3') {
+                        card.style.setProperty('opacity', '0.3', 'important');
+                        card.style.setProperty('filter', 'grayscale(100%)', 'important');
+                        card.style.setProperty('pointer-events', 'none', 'important');
+                    }
+                }
+            });
+
+            // "Remove Ads" banner wrapper hiding
+            document.querySelectorAll('.MuiButton-label, span').forEach(function(el) {
+                if (el.innerText && el.innerText.trim().toLowerCase() === 'remove ads') {
+                    var wrapper = el.closest('.MuiBox-root') || el.parentElement;
+                    if (wrapper) wrapper.style.setProperty('display', 'none', 'important');
+                }
+            });
+
             // সব fixed full-screen elements এবং specific download dialog check করো
             var fixedEls = document.querySelectorAll(
                 '.download-dialog-overlay, .download-dialog-content, ' +
@@ -274,6 +430,114 @@
                 if (container) container.remove();
             });
 
+            // HydraHD domain announcement — h1 টেক্সট দিয়ে outer wrapper hide
+            document.querySelectorAll('h1').forEach(function(h1) {
+                if (hiddenEls.has(h1)) { if (h1.style.display !== "none") h1.style.setProperty("display", "none", "important"); return; }
+                var txt = (h1.innerText || '').trim();
+                if (txt.indexOf('HydraHD') !== -1 || txt.indexOf('Watch  Movies') !== -1) {
+                    hiddenEls.add(h1);
+                    // h1 → inner div → outer div (যেটায় z-index:2)
+                    var outerWrap = h1.parentElement && h1.parentElement.parentElement
+                        ? h1.parentElement.parentElement
+                        : h1.parentElement;
+                    if (outerWrap && outerWrap !== document.body) {
+                        console.log('[XQ77] HydraHD banner hidden');
+                        outerWrap.style.setProperty('display', 'none', 'important');
+                        hiddenEls.add(outerWrap);
+                    }
+                }
+            });
+
+            // HydraHD — .alert.info এ ⊼Active Domains⊼ থাকলে parent hide
+            document.querySelectorAll('.alert.info').forEach(function(el) {
+                if (hiddenEls.has(el)) { if (el.style.display !== "none") el.style.setProperty("display", "none", "important"); return; }
+                if ((el.innerText || '').indexOf('Active Domains') !== -1) {
+                    hiddenEls.add(el);
+                    el.style.setProperty('display', 'none', 'important');
+                    // parent div ও hide
+                    var p = el.parentElement;
+                    if (p && p !== document.body) {
+                        p.style.setProperty('display', 'none', 'important');
+                        hiddenEls.add(p);
+                    }
+                }
+            });
+
+            // bilibili.tv — “Open the App / Download” dialog auto-dismiss
+            // CSS miss করলে এই JS Cancel button click করবে
+            document.querySelectorAll('.dialog__container--show').forEach(function(dialog) {
+                if (hiddenEls.has(dialog)) { if (dialog.style.display !== "none") dialog.style.setProperty("display", "none", "important"); return; }
+                // Cancel button খুঁজো
+                var cancelBtn = dialog.querySelector('button.dialog__cancel, button.dialog__cancel-min');
+                if (cancelBtn) {
+                    hiddenEls.add(dialog);
+                    console.log('[XQ77] bilibili dialog — Cancel clicked');
+                    cancelBtn.click();
+                    dialog.style.setProperty('display', 'none', 'important');
+                    var mask = dialog.closest('.dialog__mask') || dialog.parentElement;
+                    if (mask && mask !== document.body) {
+                        mask.style.setProperty('display', 'none', 'important');
+                    }
+                }
+            });
+
+            // bilibili.tv — video-toapp dialog (“Open BiliBili App”) + “Watch on BiliBili” button
+            document.querySelectorAll('.dialog__container--video-toapp-dialog').forEach(function(dialog) {
+                if (hiddenEls.has(dialog)) { if (dialog.style.display !== "none") dialog.style.setProperty("display", "none", "important"); return; }
+                hiddenEls.add(dialog);
+                // প্রথমে dialog__close button click করো
+                var closeBtn = dialog.querySelector('button.dialog__close');
+                if (closeBtn) closeBtn.click();
+                // CSS fallback
+                dialog.style.setProperty('display', 'none', 'important');
+                var mask = dialog.closest('.dialog__mask') || dialog.parentElement;
+                if (mask && mask !== document.body) {
+                    mask.style.setProperty('display', 'none', 'important');
+                }
+                console.log('[XQ77] bilibili video-toapp dialog hidden');
+            });
+
+            // bilibili.tv — “Watch on BiliBili” button
+            document.querySelectorAll('button.bstar-open-app').forEach(function(btn) {
+                if (hiddenEls.has(btn)) { if (btn.style.display !== "none") btn.style.setProperty("display", "none", "important"); return; }
+                hiddenEls.add(btn);
+                btn.style.setProperty('display', 'none', 'important');
+                console.log('[XQ77] bstar-open-app button hidden');
+            });
+
+            // "Important Notice" card handle
+            document.querySelectorAll('.notice-card').forEach(function(card) {
+                if (hiddenEls.has(card)) return;
+                
+                var closeBtn = card.querySelector('header img, button.close, [class*="close"]');
+                if (closeBtn) {
+                    console.log('[XQ77] Notice Card — Close clicked');
+                    closeBtn.click();
+                    hiddenEls.add(card);
+                    
+                    // সাথে সাথে হাইড না করে সাইটকে ১ সেকেন্ড সময় দাও
+                    setTimeout(function() {
+                        if (document.contains(card)) {
+                            card.style.setProperty('display', 'none', 'important');
+                        }
+                    }, 1000);
+                } else {
+                    // ক্লোজ বাটন পাওয়া না গেলে সতর্কতার সাথে ওভারলে চেক করো
+                    var overlay = card.closest('div[class*="fixed"][class*="inset-0"]');
+                    if (overlay) {
+                        // যদি ওভারলেতে ভিডিও বা আইফ্রেম থাকে, তবে শুধু কার্ডটি হাইড করো
+                        if (overlay.querySelector('video, iframe, #player')) {
+                            card.style.setProperty('display', 'none', 'important');
+                        } else {
+                            overlay.style.setProperty('display', 'none', 'important');
+                        }
+                    } else {
+                        card.style.setProperty('display', 'none', 'important');
+                    }
+                    hiddenEls.add(card);
+                }
+            });
+
             // JW Player & Generic Ad Overlays hiding (clickjackers)
             // .jw-reset কন্টেইনার সব সময় হাইড করা যাবে না, প্লেয়ারের কিছু অংশ এতে থাকতে পারে
             document.querySelectorAll('div[class*="click-trap"], div[class*="overlay-player"], .jw-ads-click, .jw-ads-ad-click').forEach(function(el) {
@@ -283,6 +547,8 @@
                    el.style.setProperty('pointer-events', 'none', 'important');
                 }
             });
+
+
 
             // [REFINED-NUCLEAR] Universal DOM & Shadow Scanner
             function nuclearScan(root) {
@@ -358,66 +624,153 @@
                 if (closeBtn) closeBtn.click();
                 el.remove();
             });
- 
-                fixedEls.forEach(function(el) {
-                    // computed style দিয়ে visible কিনা check (hidden skip)
-                    var style = window.getComputedStyle(el);
-                    if (style.display === 'none' || style.visibility === 'hidden') return;
-                    if (style.opacity === '0') return;
 
-                    // এটা কি dialog? — inner text এ banner phrase আছে?
-                    var txt = (el.innerText || '').toLowerCase();
-                    var isDialog = false;
-                    for (var b = 0; b < BANNER_TEXTS.length; b++) {
-                        if (txt.indexOf(BANNER_TEXTS[b]) !== -1) {
-                            isDialog = true;
-                            break;
-                        }
+            // ============================================================
+            // aoneroom.com অ্যাড রিমুভার (video-container + overlay AD)
+            // ============================================================
+            try {
+                // 1. ভিডিও অ্যাড container — pause ছাড়াই remove
+                document.querySelectorAll('#h5-ads-video-full, video.video-ads, video.video-blur-bg').forEach(function(vid) {
+                    var container = vid.closest('.video-container') || vid.closest('.h5-video-container');
+                    if (container) {
+                        console.log('[XQ77] Removing video-ad container');
+                        container.remove();
+                    } else {
+                        vid.remove();
                     }
-                    if (!isDialog) return;
-
-                    console.log('[XQ77] Visible dialog found, hiding:', el.className.substring(0, 60));
-
-                    // সরাসরি hide করো — X click এর চেয়ে বেশি নির্ভরযোগ্য
-                    el.style.setProperty('display', 'none', 'important');
-
-                    // Backdrop/overlay (parent) ও hide করো যদি থাকে
-                    var parent = el.parentElement;
-                    if (parent && parent !== document.body) {
-                        var pCls = (parent.className || '').toString();
-                        if (pCls.indexOf('fixed') !== -1 || pCls.indexOf('inset-0') !== -1) {
-                            parent.style.setProperty('display', 'none', 'important');
-                        }
-                    }
-
-                    // ১. X button click
-                    var xBtn = el.querySelector(
-                        '.dialog-close, .dialog-close img, ' +
-                        'button[aria-label="Close"], button[aria-label="close"],' +
-                        '[class*="close"] button, button[class*="close"]'
-                    );
-                    
-                    console.log('[XQ77] Found dialog element with classes:', el.className);
-                    
-                    // Directly set style properties as fallback to CSS
-                    el.style.setProperty('display', 'none', 'important');
-                    el.style.setProperty('opacity', '0', 'important');
-                    el.style.setProperty('pointer-events', 'none', 'important');
-                    el.style.setProperty('z-index', '-9999', 'important');
-                    if (!xBtn) {
-                        var btns = el.querySelectorAll('button');
-                        if (btns.length > 0) xBtn = btns[btns.length - 1];
-                    }
-                    if (xBtn) { setTimeout(function(b){ b.click(); }, 50, xBtn); }
-
-                    // ২. "Don't show it today" click
-                    el.querySelectorAll('a, span').forEach(function(child) {
-                        var ctxt = (child.innerText || '').toLowerCase().trim();
-                        if (ctxt === "don't show it today") child.click();
-                    });
                 });
+
+                // 2. .video-container এ .video-ads বা .video-blur-bg থাকলে পুরো container সরাও
+                document.querySelectorAll('div.video-container').forEach(function(container) {
+                    if (container.querySelector('.video-ads, .video-blur-bg, #h5-ads-video-full')) {
+                        console.log('[XQ77] video-container with ad found, removing');
+                        container.remove();
+                    }
+                });
+
+                // 3. নতুন ওভারলে অ্যাড — .ad-tag দিয়ে parent খুঁজো
+                document.querySelectorAll('.ad-tag').forEach(function(tag) {
+                    if (hiddenEls.has(tag)) { if (tag.style.display !== "none") tag.style.setProperty("display", "none", "important"); return; }
+                    hiddenEls.add(tag);
+                    var topWrap = tag.closest('[data-v-0117bf3e]') ||
+                                  tag.closest('[data-v-6ac5157b]') ||
+                                  tag.parentElement;
+                    if (topWrap) {
+                        console.log('[XQ77] AD overlay hidden');
+                        topWrap.style.setProperty('display', 'none', 'important');
+                    }
+                });
+
+                // 4. "Play Now" বাটন দিয়ে wrapper hide
+                document.querySelectorAll('.btn, button').forEach(function(btn) {
+                    if (hiddenEls.has(btn)) { if (btn.style.display !== "none") btn.style.setProperty("display", "none", "important"); return; }
+                    var txt = (btn.innerText || '').trim().toLowerCase();
+                    if (txt === 'play now') {
+                        hiddenEls.add(btn);
+                        var wrap = btn.closest('[data-v-0117bf3e]') ||
+                                   btn.closest('[data-v-6ac5157b]') ||
+                                   btn.parentElement;
+                        if (wrap) {
+                            console.log('[XQ77] Play Now ad button wrapper hidden');
+                            wrap.style.setProperty('display', 'none', 'important');
+                        }
+                    }
+                });
+
+                // 5. img[alt="close ads"] দিয়ে ad container hide
+                document.querySelectorAll('img[alt="close ads"]').forEach(function(img) {
+                    if (hiddenEls.has(img)) { if (img.style.display !== "none") img.style.setProperty("display", "none", "important"); return; }
+                    hiddenEls.add(img);
+                    var wrap = img.closest('[data-v-0117bf3e]') ||
+                               img.closest('[data-v-6ac5157b]') ||
+                               img.parentElement;
+                    if (wrap) {
+                        console.log('[XQ77] close-ads img parent hidden');
+                        wrap.style.setProperty('display', 'none', 'important');
+                    }
+                });
+
+                // 6. Bongo app promo banner — remove() নয়, display:none
+                document.querySelectorAll('img[alt="Bongo icon"], img[src*="bongo-solutions.com"]').forEach(function(img) {
+                    if (hiddenEls.has(img)) { if (img.style.display !== "none") img.style.setProperty("display", "none", "important"); return; }
+                    hiddenEls.add(img);
+                    var wrap = img.parentElement;
+                    for (var i = 0; i < 4; i++) {
+                        if (!wrap || wrap === document.body) break;
+                        if (wrap.tagName === 'DIV' && wrap.querySelector('button')) {
+                            var hasOpen = Array.from(wrap.querySelectorAll('button')).some(function(b) {
+                                return (b.innerText || '').trim().toUpperCase() === 'OPEN';
+                            });
+                            if (hasOpen) {
+                                console.log('[XQ77] Bongo promo banner hidden');
+                                wrap.style.setProperty('display', 'none', 'important');
+                                hiddenEls.add(wrap);
+                                return;
+                            }
+                        }
+                        wrap = wrap.parentElement;
+                    }
+                    if (img.parentElement) {
+                        img.parentElement.style.setProperty('display', 'none', 'important');
+                    }
+                });
+
             } catch(e) {}
+
+            fixedEls.forEach(function(el) {
+                var style = window.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') return;
+                if (style.opacity === '0') return;
+                var txt = (el.innerText || '').toLowerCase();
+                var isDialog = false;
+                for (var b = 0; b < BANNER_TEXTS.length; b++) {
+                    if (txt.indexOf(BANNER_TEXTS[b]) !== -1) { isDialog = true; break; }
+                }
+                if (!isDialog) return;
+                console.log('[XQ77] Visible dialog found, hiding:', el.className.substring(0, 60));
+                el.style.setProperty('display', 'none', 'important');
+                el.style.setProperty('opacity', '0', 'important');
+                el.style.setProperty('pointer-events', 'none', 'important');
+                el.style.setProperty('z-index', '-9999', 'important');
+                var parent = el.parentElement;
+                if (parent && parent !== document.body) {
+                    var pCls = (parent.className || '').toString();
+                    if (pCls.indexOf('fixed') !== -1 || pCls.indexOf('inset-0') !== -1) {
+                        parent.style.setProperty('display', 'none', 'important');
+                    }
+                }
+                var xBtn = el.querySelector(
+                    '.dialog-close, .dialog-close img, button[aria-label="Close"], button[aria-label="close"],' +
+                    '[class*="close"] button, button[class*="close"]'
+                );
+                if (!xBtn) {
+                    var btns = el.querySelectorAll('button');
+                    if (btns.length > 0) xBtn = btns[btns.length - 1];
+                }
+                if (xBtn) { setTimeout(function(b){ b.click(); }, 50, xBtn); }
+                el.querySelectorAll('a, span').forEach(function(child) {
+                    var ctxt = (child.innerText || '').toLowerCase().trim();
+                    if (ctxt === "don't show it today") child.click();
+                });
+            });
+        } catch(e) {}
         }, 1000);
+
+        (function() {
+            var style = document.createElement('style');
+            style.innerHTML = `
+                .ad-container[data-ads-url*="adv-internal"],
+                a[href*="/premium.html"],
+                .ad-container{
+                    display: none !important;
+                    opacity: 0 !important;
+                    height: 0 !important;
+                    visibility: hidden !important;
+                    pointer-events: none !important;
+                }
+            `;
+            document.head.appendChild(style);
+        })();
 
 
     injectCSS();
@@ -564,6 +917,62 @@
             setTimeout(function(){ el.style.outline = originalOutline; }, 500);
         } catch(err) {}
     }, true); // Capture phase-এ ও ইন্টারসেপ্ট করো
+
+    (function() {
+        var style = document.createElement('style');
+        style.innerHTML = `
+            .ad-container[data-ads-url*="adv-internal"],
+            a[href*="/premium.html"],
+            .ad-container {
+                display: none !important;
+            }
+
+            /* 10-second Ad Ghost Mode */
+            .player-pre-init-ads {
+                opacity: 0 !important;
+                pointer-events: none !important;
+                z-index: -9999 !important;
+                position: absolute !important;
+                left: -9999px !important;
+                top: -9999px !important;
+                width: 0 !important;
+                height: 0 !important;
+                overflow: hidden !important;
+            }
+        `;
+        document.head.appendChild(style);
+    })();
+
+
+    // Pre-Init Ads Counter - ব্যাকগ্রাউন্ড অটোমেটিক ক্লোজ
+    setInterval(function() {
+        var closeBtn = document.querySelector('.pre-init-ads--close');
+        if (closeBtn) {
+            closeBtn.click(); // বাটন পেলেই ক্লিক করে দেবে, দেখা যাক বা না যাক!
+        }
+    }, 300);
+
+    // Hide ToonStream Copyright Text
+    var centers = document.querySelectorAll('center');
+    centers.forEach(function(el) {
+        // যদি ঐ center-এর ভেতরের লেখায় 'ToonStream' লেখাটি মিলে যায়, তবেই সেটিকে হাইড করবে
+        if (el.innerText && el.innerText.includes('ToonStream Does Not Share Any Files')) {
+            el.style.display = 'none';
+        }
+    });
+
+    // Hide AnimeSalt Logo & Header Space
+    var animeLogo = document.querySelector('figure.logo.tac');
+    if (animeLogo && animeLogo.parentElement && animeLogo.parentElement.parentElement) {
+        // এটি লোগোর সাথে সাথে তার চারপাশের খালি জায়গাটুকুও পুরোপুরি মুছে দেবে
+        animeLogo.parentElement.parentElement.style.display = 'none';
+    }
+
+
+
+
+
+
 
 })();
 
