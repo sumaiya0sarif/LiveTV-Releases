@@ -70,6 +70,12 @@
     }
 
     var host = window.location.hostname;
+    // Skip aggressive cleanup on our own server to avoid breaking payment/profile pages
+    if (host.includes('beskillit.com') || host.includes('livetvapps')) {
+        console.log('[XQ77] Own server detected (' + host + '), skipping aggressive cleanup.');
+        return;
+    }
+    
     // এই ডায়লগটি moviebox.ph ছাড়াও অন্য hosts (যেমন 123movienow.cc) এ থাকতে পারে
     var isMoviebox = host.includes('moviebox.ph') || host.includes('123movienow.cc') || host.includes('aoneroom.com');
     console.log('[XQ77] Host:', host, '| isMoviebox:', isMoviebox);
@@ -139,6 +145,7 @@
         '.jw-ads-ad-click, .jw-ads-click, .jw-display-ads, .jw-hidden-overlay, .jw-ads-view, .jw-ads-tap, .jw-tap-to-play, ' +
         '.click-trap, .click-box, .tap-to-play, .play-over, .dt_mainmeta, .doothemes_widget { display: none !important; }' +
         'iframe[style*="2147483647"][width="140"], iframe[width="140"], [class*="bell-icon"], img[src*="arcaceahelper.cyou"] { display: none !important; }' +
+        'img[src*="eagllwin.com"], a[href*="eagllwin.com"], a[href*="hisavana.com"], .tmcClose, div:has(.tmcClose) { display: none !important; }' +
 
 
         '.swiper.mySwiper, .mynav, .social-sharing, .sbox, .chat-float-btn { display: none !important; }' +
@@ -549,6 +556,19 @@
             });
 
 
+            // Target specific ad container by its internal tmcClose class
+            document.querySelectorAll('.tmcClose').forEach(function(el) {
+                if (hiddenEls.has(el)) return;
+                hiddenEls.add(el);
+                // HTML structure shows: outer-div > inner-div > .tmcClose
+                var container = el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement : el.parentElement;
+                if (container && container !== document.body) {
+                    console.log('[XQ77] Removing tmcClose ad container');
+                    container.remove();
+                } else {
+                    el.remove();
+                }
+            });
 
             // [REFINED-NUCLEAR] Universal DOM & Shadow Scanner
             function nuclearScan(root) {
