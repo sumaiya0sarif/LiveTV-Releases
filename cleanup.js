@@ -148,7 +148,7 @@
         'img[src*="eagllwin.com"], a[href*="eagllwin.com"], a[href*="hisavana.com"], .tmcClose, div:has(.tmcClose) { display: none !important; }' +
 
 
-        '.swiper.mySwiper, .mynav, .social-sharing, .sbox, .chat-float-btn { display: none !important; }' +
+        '.swiper.mySwiper, .mynav, .social-sharing, .chat-float-btn { display: none !important; }' +
 
         'a[href*="anigo.to"] { display: none !important; }'+
         // aoneroom.com ভিডিও অ্যাড কন্টেইনার — blur bg + ad video + wrapper
@@ -221,6 +221,7 @@
             'a[href*="telegram.me"][target="_blank"]' +
             ' { display: none !important; }'
         ) : '');
+
 
 
 
@@ -645,6 +646,7 @@
                 el.remove();
             });
 
+
             // ============================================================
             // aoneroom.com অ্যাড রিমুভার (video-container + overlay AD)
             // ============================================================
@@ -987,6 +989,51 @@
         // এটি লোগোর সাথে সাথে তার চারপাশের খালি জায়গাটুকুও পুরোপুরি মুছে দেবে
         animeLogo.parentElement.parentElement.style.display = 'none';
     }
+
+
+    var style = document.createElement('style');
+    style.innerHTML = `
+        .sidebar,
+        #secondary,
+        .widget-area,
+        #movietheme_genres_widget-3,
+        #movietheme_years_widget-3,
+        #movietheme_popular_movies_widget-3 {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            width: 0 !important;
+            overflow: hidden !important;
+        }
+    `;
+    document.head.appendChild(style);
+
+
+
+    (function() {
+        // ক্যাপচারিং ফেজ (Capturing Phase) এ ক্লিক ইভেন্ট অ্যাড করা
+        // এর ফলে সাইটের নিজস্ব অ্যাড-স্ক্রিপ্ট ক্লিক ধরার আগেই আমরা ক্লিকটা ধরতে পারব।
+        window.addEventListener('click', function(e) {
+
+            // চেক করা হচ্ছে ক্লিকটি কোনো লিংক (a tag) এর ওপর পড়েছে কি না
+            var anchor = e.target.closest('a');
+
+            // যদি এটি একটি ভ্যালিড লিংক হয় (যেমন: মুভির লিংক)
+            if (anchor && anchor.href && anchor.href.startsWith('http')) {
+
+                // সাইটের হিডেন অ্যাড-স্ক্রিপ্টকে এই ক্লিকটা দেখতে বাধা দেওয়া হচ্ছে
+                e.stopPropagation();
+
+                // ডিফল্ট কাজ আটকে দিয়ে ম্যানুয়ালি লিংকে রিডাইরেক্ট করা হচ্ছে
+                e.preventDefault();
+                window.location.href = anchor.href;
+            }
+        }, true); // 'true' খুবই গুরুত্বপূর্ণ, এটি সবার আগে ইভেন্ট রান করে
+    })();
+
+
+
 
 
 
