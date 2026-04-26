@@ -150,10 +150,10 @@
 
         '.swiper.mySwiper, .mynav, .social-sharing, .chat-float-btn { display: none !important; }' +
 
-        'a[href*="anigo.to"] { display: none !important; }'+
+        'a[href*="anigo.to"], a[href*="profitablecpmratenetwork"] { display: none !important; pointer-events: none !important; }'+
         // aoneroom.com ভিডিও অ্যাড কন্টেইনার — blur bg + ad video + wrapper
         'video.video-blur-bg { display: none !important; }'+
-        '.h5-video-Ads, .video-ads { display: none !important; }'+
+        '.h5-video-Ads, .video-ads, .h5-custome-ads-mid, .home-middle-ads, .h5-ads, .btm-download-box, .mid-download-box { display: none !important; }'+
         '#h5-ads-video-full { display: none !important; }'+
         '.video-container:has(.video-ads), .video-container:has(#h5-ads-video-full), .video-container:has(.video-blur-bg) { display: none !important; }'+
         '.h5-video-container { display: none !important; }'+
@@ -1013,21 +1013,58 @@
 
     (function() {
         // ক্যাপচারিং ফেজ (Capturing Phase) এ ক্লিক ইভেন্ট অ্যাড করা
-        // এর ফলে সাইটের নিজস্ব অ্যাড-স্ক্রিপ্ট ক্লিক ধরার আগেই আমরা ক্লিকটা ধরতে পারব।
         window.addEventListener('click', function(e) {
-
-            // চেক করা হচ্ছে ক্লিকটি কোনো লিংক (a tag) এর ওপর পড়েছে কি না
+            // চেক করা হচ্ছে ক্লিকটি কোনো লিংক (a tag) বা .item কার্ডের ওপর পড়েছে কি না
             var anchor = e.target.closest('a');
+            var item = e.target.closest('.item');
 
-            // যদি এটি একটি ভ্যালিড লিংক হয় (যেমন: মুভির লিংক)
-            if (anchor && anchor.href && anchor.href.startsWith('http')) {
+            // যদি a tag এ ক্লিক না হয়ে .item এর অন্য কোথাও ক্লিক হয়, তাহলে লিংটি খুঁজে বের করা
+            if (!anchor && item) {
+                anchor = item.querySelector('a');
+            }
 
-                // সাইটের হিডেন অ্যাড-স্ক্রিপ্টকে এই ক্লিকটা দেখতে বাধা দেওয়া হচ্ছে
-                e.stopPropagation();
+            // যদি এটি একটি ভ্যালিড লিংক হয়
+            if (anchor && (anchor.href || anchor.getAttribute('href'))) {
+                var href = anchor.href || anchor.getAttribute('href');
+                
+                // শুধুমাত্র http এবং রিলেটিভ (/) লিংকগুলোকে অ্যালাও করা হচ্ছে
+                if (href && (href.startsWith('http') || href.startsWith('/'))) {
+                    // রিলেটিভ ইউআরএল ফিক্স করা
+                    if (href.startsWith('/')) {
+                        href = window.location.origin + href;
+                    }
+                    
+                    // চেক করি লিংকটি সেফ কিনা
+                    var isSafe = false;
+                    try {
+                        var targetHost = new URL(href).hostname.toLowerCase();
+                        var currentHost = window.location.hostname.toLowerCase();
+                        if (targetHost === currentHost) {
+                            isSafe = true;
+                        } else {
+                            var allowed = [
+                                'watchofree.beauty', 'moviebox.ph', '123movienow.cc', 'aoneroom.com', 'bongobd.com', 
+                                'beskillit.com', 'mkvfun.cyou', 'mkvfun.com', 'speedostream.com', 'bilibili.tv',
+                                '1flex.nl', 'yflix.to', 'animesalt.ac', 'toonstream.dad', 'hydrahd.ru', 'lookmovie2.to'
+                            ];
+                            isSafe = allowed.some(function(h) { return targetHost.includes(h); });
+                        }
+                    } catch(err) {}
 
-                // ডিফল্ট কাজ আটকে দিয়ে ম্যানুয়ালি লিংকে রিডাইরেক্ট করা হচ্ছে
-                e.preventDefault();
-                window.location.href = anchor.href;
+                    if (isSafe) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        window.location.href = href;
+                    } else {
+                        // Unsafe ad link clicked (maybe hidden overlay missed by CSS)
+                        console.log('[XQ77] Blocked unsafe click intercept to:', href);
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (anchor && anchor.style) {
+                            anchor.style.setProperty('display', 'none', 'important'); // hide it for next click
+                        }
+                    }
+                }
             }
         }, true); // 'true' খুবই গুরুত্বপূর্ণ, এটি সবার আগে ইভেন্ট রান করে
     })();
