@@ -153,7 +153,7 @@
         'a[href*="anigo.to"], a[href*="profitablecpmratenetwork"] { display: none !important; pointer-events: none !important; }'+
         // aoneroom.com ভিডিও অ্যাড কন্টেইনার — blur bg + ad video + wrapper
         'video.video-blur-bg { display: none !important; }'+
-        '.h5-video-Ads, .video-ads, .h5-custome-ads-mid, .home-middle-ads, .h5-ads, .btm-download-box, .mid-download-box { display: none !important; }'+
+        '.h5-video-Ads, .video-ads, .h5-custome-ads-mid, .home-middle-ads, .h5-ads, .btm-download-box, .mid-download-box, .H5homeNativeMobile, #nativeIndex, article.comp-box:has(.H5homeNativeMobile) { display: none !important; }'+
         '#h5-ads-video-full { display: none !important; }'+
         '.video-container:has(.video-ads), .video-container:has(#h5-ads-video-full), .video-container:has(.video-blur-bg) { display: none !important; }'+
         '.h5-video-container { display: none !important; }'+
