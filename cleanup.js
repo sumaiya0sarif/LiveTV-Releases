@@ -266,7 +266,9 @@
         'open app for faster',
         'more free movies and shows',
         'open app to',
-        'available in the app'
+        'available in the app',
+        'please support us',
+        'share your referral link'
         // NOTE: 'watch in app' এখানে নেই — hideByKeyword directly handle করে
     ];
 
@@ -754,6 +756,11 @@
                 el.style.setProperty('opacity', '0', 'important');
                 el.style.setProperty('pointer-events', 'none', 'important');
                 el.style.setProperty('z-index', '-9999', 'important');
+                
+                // Unlock body scroll if it was locked by the popup
+                document.body.style.setProperty('overflow', 'auto', 'important');
+                document.documentElement.style.setProperty('overflow', 'auto', 'important');
+
                 var parent = el.parentElement;
                 if (parent && parent !== document.body) {
                     var pCls = (parent.className || '').toString();
@@ -847,6 +854,8 @@
                                         return function() {
                                             console.log('[XQ77] Auto-clicking X on dialog');
                                             b.click();
+                                            document.body.style.setProperty('overflow', 'auto', 'important');
+                                            document.documentElement.style.setProperty('overflow', 'auto', 'important');
                                         };
                                     }(btn), 100);
                                 } else {
