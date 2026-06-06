@@ -1,5 +1,6 @@
 import gzip
 import urllib.request
+import shutil
 import xml.etree.ElementTree as ET
 import os
 
@@ -8,7 +9,9 @@ downloaded_file = "master_epg.xml.gz"
 output_file = "bd_in_guide.xml.gz"
 
 print("Downloading master EPG file (this may take a minute)...")
-urllib.request.urlretrieve(source_url, downloaded_file)
+req = urllib.request.Request(source_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+with urllib.request.urlopen(req) as response, open(downloaded_file, 'wb') as out_file:
+    shutil.copyfileobj(response, out_file)
 
 valid_channels = set()
 
