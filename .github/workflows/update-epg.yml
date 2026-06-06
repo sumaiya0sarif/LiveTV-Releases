@@ -1,0 +1,35 @@
+name: Daily EPG Auto Updater
+
+on:
+  schedule:
+    # এটি প্রতিদিন রাত ১২টায় (UTC) রান করবে (বাংলাদেশ সময় সকাল ৬টা)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # আপনাকে ম্যানুয়ালি রান করার অপশন দিবে
+
+permissions:
+  contents: write
+
+jobs:
+  update-epg:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Run Filter Script
+        run: |
+          python filter_epg.py
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add bd_in_guide.xml.gz
+          # Only commit if there are changes
+          git commit -m "Auto-update EPG [skip ci]" || exit 0
+          git push
